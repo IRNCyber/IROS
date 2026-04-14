@@ -1,157 +1,159 @@
-
-
-
 # IROS (Intelligent Real-time Operating System)
 
-Minimal BIOS-bootable 32-bit x86 kernel written in C (freestanding) with a tiny boot sector loader.
+Minimal BIOS-bootable 32-bit x86 kernel written in freestanding C with a tiny boot sector loader.
 
----
+## Current Features
+- BIOS boot sector loads the kernel from disk into memory
+- Switches CPU to 32-bit protected mode
+- VGA text console with cursor control, scrolling, and a bottom status bar
+- Kali-like text UI (ANSI SGR colors + styled prompt in VGA text mode)
+- Structured logging (`log_info`, `log_error`)
+- Heap allocator (`kmalloc` / `kfree`) with usage stats (`mem` command)
+- IDT + PIC remap + keyboard IRQ1 handler
+- Interactive shell with built-in commands
+- Simple “apps” registry compiled into the kernel (`app list/info/run`)
 
-## Overview
+## Layout
+- `boot/` - BIOS boot sector (`boot.S` + `boot.ld`)
+- `kernel/` - kernel code (C + `.S`)
+- `include/` - freestanding headers
+- `lib/` - small libc-like helpers (freestanding)
+- `apps/` - app manifests (`*.app`) compiled into the kernel
+- `tools/` - helper scripts (image builder + app codegen + host installer)
+- `linker.ld` - kernel linker script
+- `build.ps1` / `build.cmd` - Windows build
+- `run.ps1` - Windows QEMU runner
+- `Makefile` - Make-based build
 
-This version (**v0.0.1**) represents the initial working kernel of IROS.
-The system successfully boots, initializes core components, and demonstrates basic memory and output functionality.
+## Toolchain
+You need a 32-bit freestanding toolchain and an emulator.
 
----
+Option A (LLVM, recommended on Windows):
+- `clang`
+- `ld.lld` (or `lld`)
+- `llvm-objcopy`
 
-## What it does (v0.0.1)
+Option B (GNU cross toolchain):
+- `i686-elf-gcc`
+- `i686-elf-ld`
+- `i686-elf-objcopy`
 
-* BIOS boot sector loads the kernel from disk into memory
-* Switches CPU to 32-bit protected mode
-* Initializes a basic VGA text console
-* Displays: `IROS Kernel Initialized`
-* Implements a minimal memory allocator (`kmalloc`)
-* Confirms memory allocation during runtime:
+Also:
+- `python` / `python3` (used by `build.ps1` / `Makefile` / tools)
+- `qemu-system-i386` (to run)
 
-  ```
-  kmalloc(64) = 0x000016A0
-  ```
+Note: the kernel is built with SSE/MMX/x87 disabled (soft-float) to avoid invalid-opcode faults before FPU/SSE init.
 
----
+## Install Tools (Windows)
+Pick one package manager path.
 
-## Current Capabilities
-
-* Bootable kernel image
-* Stable execution in emulator (QEMU)
-* Direct hardware-level screen output
-* Basic memory allocation (bump allocator)
-
----
-
-## Known Limitations
-
-* No keyboard input support
-* No interrupt handling (IDT/IRQ not implemented)
-* No interactive shell or command processing
-* No multitasking or scheduling
-* Static execution after initialization
-
----
-
-## Project Structure
-
-* `boot/` – BIOS boot sector (Assembly + linker script)
-* `kernel/` – kernel entry and core logic
-* `include/` – freestanding headers
-* `linker.ld` – kernel linker script
-* `build.ps1` – Windows build script
-* `build.cmd` – Windows shortcut build script
-* `Makefile` – cross-platform build system
-* `tools/` – helper scripts (image builder)
-
----
-
-## Toolchain Requirements
-
-### Option A (LLVM – Recommended)
-
-* `clang`
-* `ld.lld`
-* `llvm-objcopy`
-
-### Option B (GNU Cross Toolchain)
-
-* `i686-elf-gcc`
-* `i686-elf-ld`
-* `i686-elf-objcopy`
-
-### Additional Tools
-
-* `python3`
-* `qemu-system-i386`
-
----
-
-## Build Instructions
-
-### Windows (PowerShell)
-
+### Option 1: winget
 ```powershell
+winget install --id LLVM.LLVM
+winget install --id QEMU.QEMU
+winget install --id Python.Python.3
+winget install --id Git.Git
+```
+
+### Option 2: Chocolatey
+```powershell
+choco install -y llvm qemu python git
+```
+
+After installing, open a new terminal and verify:
+```powershell
+clang --version
+ld.lld --version
+llvm-objcopy --version
+qemu-system-i386 --version
+python --version
+git --version
+```
+
+## Build + Run (Windows PowerShell)
+```powershell
+cd C:\Users\rohan\CLionProjects\IROS
 .\build.ps1
+.\run.ps1
 ```
 
-Alternative:
-
-```bat
-build.cmd
+If `run.ps1` can’t find QEMU, set `QEMU_HOME` (adjust if installed elsewhere):
+```powershell
+$env:QEMU_HOME = "C:\Program Files\qemu"
 ```
 
-Run:
+## Shell Commands
+Core:
+- `help`, `clear` / `cls`, `mem`, `echo <text>`
+- `version`, `about`, `banner`
+- `color <fg> <bg>` (0-15), `status on|off`, `prompt kali|simple`
+- `alloc [size]`, `free`, `reboot`, `halt`
+
+Apps:
+- `app list`
+- `app info <name>`
+- `app run <name>`
+- `app hostrun <name>` (host-side execution helper)
+- `app install <git-url>` (prints host command)
+- `git install <git-url>` (alias/help for the host installer)
+
+Python bridge (runs Python on the host via QEMU serial TCP):
+- Start QEMU with `-PyBridge` and run `tools/iros-pybridge.py` on the host
+- In IROS:
+  - `py ping`
+  - `py exec <code>`
+  - `py run <app-name>` (runs `apps-src/<app-name>` on the host; manifest `type=python` is recommended but not required)
+
+Quick demo:
+```text
+help
+banner
+app list
+app run hello
+mem
+echo hello from iros
+```
+
+## Installing Apps (Git, Host-Assisted)
+IROS doesn’t run full git on bare metal yet (no network/filesystem). “Installing” an app is done on the host by cloning a repo and converting it into an `apps-installed/*.app` manifest, then regenerating `kernel/apps_gen.c`.
 
 ```powershell
-qemu-system-i386 -drive format=raw,file=build\iros.img
+powershell -ExecutionPolicy Bypass -File tools\iros-install.ps1 https://github.com/<user>/<repo>
+tools\iros-hostrun.ps1 <appname> [entry.py]
+.\build.ps1
+.\run.ps1
 ```
 
----
+## Running Python “from IROS” (Host Bridge)
+1) Start QEMU with the bridge enabled:
+```powershell
+.\run.ps1 -PyBridge
+```
 
-### Linux / macOS
+2) In another terminal, connect the bridge:
+```powershell
+python tools\iros-pybridge.py
+```
 
+3) In IROS:
+```text
+py ping
+py exec print("hello from python")
+py run tactages
+```
+
+Base/distribution apps live in `apps/`. Host-installed apps live in `apps-installed/` (ignored by git).
+
+If the repo contains `iros.app` at its root, it will be used directly. Otherwise, the installer will create a basic `.app` from the repo name and README snippet.
+
+## Build (Make)
+Linux/macOS:
 ```sh
 make
 qemu-system-i386 -drive format=raw,file=build/iros.img
 ```
 
----
-
-### Windows (Make – Optional)
-
+Windows (if you have `mingw32-make` on PATH):
 ```bat
 mingw32-make CC=clang LD=ld.lld OBJCOPY=llvm-objcopy PY=python
 ```
-
-If `ld.lld` is unavailable:
-
-```bat
-mingw32-make CC=clang LD=lld OBJCOPY=llvm-objcopy PY=python
-```
-
-If `mingw32-make` is not recognized:
-
-* Use `build.ps1` or `build.cmd` (recommended)
-* Or add MinGW `bin` directory to PATH
-
----
-
-## Notes
-
-* This is a foundational kernel (no libc, paging, or multitasking)
-* Bootloader loads a fixed kernel binary from disk image
-* Designed for learning and incremental OS development
-
----
-
-## Roadmap (Next Milestones)
-
-* Keyboard driver implementation
-* Interrupt handling (IDT + IRQ)
-* Interactive shell (CLI)
-* Enhanced memory management
-* Modular kernel architecture
-
----
-
-## Summary
-
-IROS v0.0.1 establishes the core foundation of the system, proving control over boot process, memory, and hardware-level output. Future versions will focus on interactivity, system stability, and expanded operating system capabilities.
-
----

@@ -69,7 +69,7 @@ else
   OBJCOPY ?= llvm-objcopy
 endif
 
-CFLAGS := -m32 -ffreestanding -fno-stack-protector -fno-builtin -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-pic -I include -O2 -Wall -Wextra
+CFLAGS := -m32 -ffreestanding -fno-stack-protector -fno-builtin -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-sse -mno-sse2 -mno-mmx -mno-80387 -msoft-float -fno-pic -I include -O2 -Wall -Wextra
 
 ifneq (,$(findstring clang,$(notdir $(CC))))
   CC_TARGET := --target=$(TARGET)
@@ -86,9 +86,20 @@ endif
 
 KERNEL_OBJS := \
 	$(BUILD_DIR)/entry.o \
+	$(BUILD_DIR)/isr_stub.o \
 	$(BUILD_DIR)/kernel.o \
 	$(BUILD_DIR)/vga.o \
+	$(BUILD_DIR)/log.o \
 	$(BUILD_DIR)/memory.o \
+	$(BUILD_DIR)/idt.o \
+	$(BUILD_DIR)/pic.o \
+	$(BUILD_DIR)/isr.o \
+	$(BUILD_DIR)/keyboard.o \
+	$(BUILD_DIR)/shell.o \
+	$(BUILD_DIR)/status.o \
+	$(BUILD_DIR)/serial.o \
+	$(BUILD_DIR)/apps.o \
+	$(BUILD_DIR)/apps_gen.o \
 	$(BUILD_DIR)/string.o
 
 .PHONY: all clean run
@@ -107,13 +118,49 @@ $(BUILD_DIR):
 $(BUILD_DIR)/entry.o: kernel/entry.S | $(BUILD_DIR)
 	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/isr_stub.o: kernel/isr_stub.S | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/kernel.o: kernel/kernel.c | $(BUILD_DIR)
 	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/vga.o: kernel/vga.c | $(BUILD_DIR)
 	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/log.o: kernel/log.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/memory.o: kernel/memory.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/idt.o: kernel/idt.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/pic.o: kernel/pic.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/isr.o: kernel/isr.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/keyboard.o: kernel/keyboard.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/shell.o: kernel/shell.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/status.o: kernel/status.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/serial.o: kernel/serial.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/apps.o: kernel/apps.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/apps_gen.c: tools/gen_apps.py $(wildcard apps/*.app)
+	$(PY) tools/gen_apps.py
+
+$(BUILD_DIR)/apps_gen.o: kernel/apps_gen.c $(BUILD_DIR)/apps_gen.c | $(BUILD_DIR)
 	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/string.o: lib/string.c | $(BUILD_DIR)

@@ -12,3 +12,7 @@ static inline u8 inb(u16 port) {
   return ret;
 }
 
+static inline void io_wait(void) {
+  /* Port 0x80 is historically used for 'checkpoints' during POST. */
+  __asm__ volatile ("outb %%al, $0x80" : : "a"(0));
+}

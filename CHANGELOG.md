@@ -43,3 +43,31 @@ The format is based on Keep a Changelog principles and semantic versioning.
 ---
 
 [Full Changelog](https://github.com/IRNCyber/IROS/commits/v0.0.1)
+
+---
+
+## [v1.0.0.1] - 2026-04-14
+
+### Added
+- Interactive shell with commands: `help`, `clear`, `mem`, `echo`
+- Keyboard driver via IRQ1 (PS/2 controller ports `0x60`/`0x64`) with basic US Set 1 scancode mapping
+- IDT setup and ISR stubs; PIC remap to `0x20`/`0x28` with proper EOI handling
+- Structured logging (`log_info`, `log_error`)
+- VGA cursor control (hardware cursor) + backspace handling
+- Heap allocator upgrade: `kmalloc` + `kfree` + `kmem_stats`
+- Windows runner helper `run.ps1` (auto-detects QEMU via PATH/common install paths)
+
+### Changed
+- Build system no longer depends on NASM: boot sector and kernel entry use `.S` (GAS/Clang-compatible)
+- Boot image generation is now cross-platform via `tools/mkimg.py`
+
+### Validation
+- Kernel builds to a raw bootable image (`build/iros.img`) via `build.ps1`
+- Boot + shell validated under QEMU (requires QEMU installed and accessible)
+
+### Limitations
+- No multitasking/scheduler
+- No paging/virtual memory
+- Minimal keyboard support (no extended scancodes)
+
+[Full Changelog](https://github.com/IRNCyber/IROS/commits/v1.0.0.1)

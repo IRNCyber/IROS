@@ -23,3 +23,21 @@ usize strlen(const char *s) {
   return n;
 }
 
+int strcmp(const char *a, const char *b) {
+  usize i = 0;
+  while (a[i] && b[i]) {
+    if (a[i] != b[i]) return (int)((unsigned char)a[i] - (unsigned char)b[i]);
+    i++;
+  }
+  return (int)((unsigned char)a[i] - (unsigned char)b[i]);
+}
+
+int strncmp(const char *a, const char *b, usize n) {
+  for (usize i = 0; i < n; i++) {
+    unsigned char ac = (unsigned char)a[i];
+    unsigned char bc = (unsigned char)b[i];
+    if (ac != bc) return (int)(ac - bc);
+    if (ac == 0) return 0;
+  }
+  return 0;
+}

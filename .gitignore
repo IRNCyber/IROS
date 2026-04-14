@@ -5,3 +5,12 @@ build/
 *.iso
 *.o
 
+# IDE
+.idea/
+*.iml
+
+# Host-only app sources (cloned repos)
+apps-src/
+
+# Host-installed app manifests (not part of base distribution)
+apps-installed/
