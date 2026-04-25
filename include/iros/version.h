@@ -1,3 +1,3 @@
 #pragma once
 
-#define IROS_VERSION "v1.0.0.2"
+#define IROS_VERSION "v2.0.0.2"
