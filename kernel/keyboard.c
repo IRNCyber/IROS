@@ -14,6 +14,8 @@ static volatile u32 ring_w = 0;
 static u8 key_down[128];
 
 static int shift_down = 0;
+static int ctrl_down = 0;
+static int caps_lock = 0;
 static int e0_prefix = 0;
 static int irq_enabled = 0;
 
@@ -47,8 +49,7 @@ static char scancode_to_ascii(u8 sc, int shifted) {
   };
 
   if (sc >= 128) return 0;
-  char c = shifted ? map_shift[sc] : map[sc];
-  return c;
+  return shifted ? map_shift[sc] : map[sc];
 }
 
 static void keyboard_process_scancode(u8 sc) {
@@ -66,6 +67,7 @@ static void keyboard_process_scancode(u8 sc) {
       return;
     }
     if (rel == 0x2A || rel == 0x36) shift_down = 0;
+    if (rel == 0x1D) ctrl_down = 0;
     return;
   }
 
@@ -107,14 +109,34 @@ static void keyboard_process_scancode(u8 sc) {
     return;
   }
 
+  /* Ctrl make */
+  if (sc == 0x1D) {
+    key_down[sc] = 1;
+    ctrl_down = 1;
+    return;
+  }
+
+  /* Caps Lock toggle */
+  if (sc == 0x3A) {
+    caps_lock = !caps_lock;
+    return;
+  }
+
   /* Debounce typematic repeats: accept one make per press, until break arrives. */
   if (sc < 128) {
     if (key_down[sc]) return;
     key_down[sc] = 1;
   }
 
-  char c = scancode_to_ascii(sc, shift_down);
-  if (c) ring_put((u16)(u8)c);
+  int effective_shift = shift_down ^ caps_lock;
+  char c = scancode_to_ascii(sc, effective_shift);
+  if (ctrl_down && c >= 'a' && c <= 'z') {
+    ring_put((u16)(u8)(c - 'a' + 1));
+  } else if (ctrl_down && c >= 'A' && c <= 'Z') {
+    ring_put((u16)(u8)(c - 'A' + 1));
+  } else if (c) {
+    ring_put((u16)(u8)c);
+  }
 }
 
 static void keyboard_poll_once(void) {
@@ -152,6 +174,8 @@ void keyboard_init(void) {
   ring_r = 0;
   ring_w = 0;
   shift_down = 0;
+  ctrl_down = 0;
+  caps_lock = 0;
   e0_prefix = 0;
 
   isr_register(33, keyboard_irq);

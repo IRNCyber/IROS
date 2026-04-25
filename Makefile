@@ -63,10 +63,36 @@ ifeq ($(OS),Windows_NT)
     endif
   endif
 else
-  CC ?= clang
-  LD ?= ld.lld
+  # CC ?= would not override Make's implicit CC=cc, so detect and fix.
+  ifneq ($(origin CC),command line)
+    ifneq ($(HAVE_CLANG),)
+      override CC := clang
+    else ifneq ($(HAVE_I686_GCC),)
+      override CC := i686-elf-gcc
+    endif
+  endif
+  ifneq ($(origin LD),command line)
+    ifneq ($(HAVE_LD_LLD),)
+      override LD := ld.lld
+    else ifneq ($(HAVE_LLD),)
+      override LD := lld
+      override LD_FLAVOR := -flavor gnu
+    else ifneq ($(HAVE_I686_LD),)
+      override LD := i686-elf-ld
+    else
+      override LD := ld
+    endif
+  endif
   LD_FLAVOR ?=
-  OBJCOPY ?= llvm-objcopy
+  ifneq ($(origin OBJCOPY),command line)
+    ifneq ($(HAVE_LLVM_OBJCOPY),)
+      override OBJCOPY := llvm-objcopy
+    else ifneq ($(HAVE_I686_OBJCOPY),)
+      override OBJCOPY := i686-elf-objcopy
+    else
+      override OBJCOPY := objcopy
+    endif
+  endif
 endif
 
 CFLAGS := -m32 -ffreestanding -fno-stack-protector -fno-builtin -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-sse -mno-sse2 -mno-mmx -mno-80387 -msoft-float -fno-pic -I include -O2 -Wall -Wextra
@@ -101,9 +127,15 @@ KERNEL_OBJS := \
 	$(BUILD_DIR)/shell.o \
 	$(BUILD_DIR)/status.o \
 	$(BUILD_DIR)/serial.o \
+	$(BUILD_DIR)/timer.o \
+	$(BUILD_DIR)/rtc.o \
+	$(BUILD_DIR)/paging.o \
+	$(BUILD_DIR)/tss.o \
+	$(BUILD_DIR)/ramdisk.o \
 	$(BUILD_DIR)/apps.o \
 	$(BUILD_DIR)/apps_gen.o \
-	$(BUILD_DIR)/string.o
+	$(BUILD_DIR)/string.o \
+	$(BUILD_DIR)/format.o
 
 .PHONY: all clean run
 
@@ -178,6 +210,24 @@ $(BUILD_DIR)/apps_gen.o: kernel/apps_gen.c $(BUILD_DIR)/apps_gen.c | $(BUILD_DIR
 $(BUILD_DIR)/string.o: lib/string.c | $(BUILD_DIR)
 	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/format.o: lib/format.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/timer.o: kernel/timer.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/rtc.o: kernel/rtc.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/paging.o: kernel/paging.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/tss.o: kernel/tss.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/ramdisk.o: kernel/ramdisk.c | $(BUILD_DIR)
+	$(CC) $(CC_TARGET) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/kernel.elf: $(KERNEL_OBJS) linker.ld
 	$(LD) $(LD_FLAVOR) -m elf_i386 -T linker.ld -o $@ $(KERNEL_OBJS)
 
@@ -192,8 +242,13 @@ $(BUILD_DIR)/boot.bin: boot/boot.S boot/boot.ld $(BUILD_DIR)/kernel.bin | $(BUIL
 $(BUILD_DIR)/iros.img: $(BUILD_DIR)/boot.bin $(BUILD_DIR)/kernel.bin
 	$(PY) tools/mkimg.py --boot $(BUILD_DIR)/boot.bin --kernel $(BUILD_DIR)/kernel.bin --out $@
 
+QEMU_DISPLAY ?= gtk
+
 run: $(BUILD_DIR)/iros.img
-	qemu-system-i386 -drive format=raw,file=$(BUILD_DIR)/iros.img
+	qemu-system-i386 -drive format=raw,file=$(BUILD_DIR)/iros.img -display $(QEMU_DISPLAY)
+
+run-serial: $(BUILD_DIR)/iros.img
+	qemu-system-i386 -drive format=raw,file=$(BUILD_DIR)/iros.img -serial stdio -display $(QEMU_DISPLAY)
 
 clean:
 	rm -rf $(BUILD_DIR)

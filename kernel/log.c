@@ -1,4 +1,5 @@
 #include <iros/log.h>
+#include <iros/rtc.h>
 #include <iros/serial.h>
 #include <iros/vga.h>
 
@@ -30,10 +31,20 @@ static void dmesg_write(const char *s) {
 }
 
 static void log_emit(const char *tag, unsigned fg, const char *msg) {
+  rtc_time_t t;
+  rtc_read(&t);
+  char ts[10];
+  rtc_format_time(&t, ts);
+
+  vga_set_color(8, 0);
+  vga_write(ts);
+  vga_write(" ");
   log_prefix(tag, fg);
   vga_write(msg);
   vga_write("\n");
 
+  dmesg_write(ts);
+  dmesg_putc(' ');
   dmesg_write(tag);
   dmesg_putc(' ');
   dmesg_write(msg);
