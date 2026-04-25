@@ -119,8 +119,7 @@ void kfree(void *ptr) {
 
   for (kmem_block_t *b = heap_head; b; b = b->next) {
     if (b->free) continue;
-    usize payload = align_up((usize)(b + 1), (b->padding ? 16 : 16));
-    payload = (usize)(b + 1) + (usize)b->padding;
+    usize payload = (usize)(b + 1) + (usize)b->padding;
     if (payload == p) {
       b->free = 1;
       b->payload_size = 0;
