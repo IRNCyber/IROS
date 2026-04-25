@@ -2,6 +2,7 @@
 #include <iros/cpu.h>
 #include <iros/log.h>
 #include <iros/memory.h>
+#include <iros/mouse.h>
 #include <iros/status.h>
 #include <iros/string.h>
 #include <iros/vga.h>
@@ -10,7 +11,13 @@
 #include <iros/apps.h>
 #include <iros/serial.h>
 
-static int use_kali_prompt = 1;
+enum {
+  UI_MODE_SIMPLE = 0,
+  UI_MODE_KALI = 1,
+  UI_MODE_PANEL = 2,
+};
+
+static int ui_mode = UI_MODE_SIMPLE;
 static void *last_alloc = (void *)0;
 
 enum { HIST_MAX = 16, HIST_LEN = 128 };
@@ -62,8 +69,14 @@ static int parse_u32(const char *s, u32 *out, const char **end) {
 static void print_prompt(void) {
   status_update();
 
-  if (!use_kali_prompt) {
+  if (ui_mode == UI_MODE_SIMPLE) {
     vga_write_ansi("\x1b[36mIROS\x1b[0m > ");
+    return;
+  }
+
+  if (ui_mode == UI_MODE_PANEL) {
+    vga_write_ansi("\x1b[30;46m IROS PANEL \x1b[0m ");
+    vga_write_ansi("\x1b[37mcmd>\x1b[0m ");
     return;
   }
 
@@ -131,11 +144,27 @@ static const char *hist_get(u32 absolute_index) {
   return history[slot];
 }
 
+static void write_u32_dec(u32 v) {
+  char tmp[11];
+  u32 n = 0;
+  if (v == 0) {
+    vga_putc('0');
+    return;
+  }
+  while (v && n < sizeof(tmp)) {
+    tmp[n++] = (char)('0' + (v % 10u));
+    v /= 10u;
+  }
+  while (n > 0) vga_putc(tmp[--n]);
+}
+
 static void cmd_help(void) {
   vga_write("Commands:\n");
   vga_write("  help            - list commands\n");
   vga_write("  clear | cls     - clear screen\n");
   vga_write("  mem             - memory usage\n");
+  vga_write("  dmesg           - dump kernel log buffer\n");
+  vga_write("  log serial on|off - mirror logs to COM1\n");
   vga_write("  echo <text>     - echo arguments\n");
   vga_write("  app list        - list installed apps\n");
   vga_write("  app info <name> - show app info\n");
@@ -149,13 +178,47 @@ static void cmd_help(void) {
   vga_write("  version         - print version\n");
   vga_write("  about           - short system info\n");
   vga_write("  banner          - show banner\n");
+  vga_write("  logo            - show logo info\n");
   vga_write("  color <fg> <bg> - set VGA color (0-15)\n");
   vga_write("  status on|off   - toggle status bar\n");
   vga_write("  prompt kali|simple - toggle prompt style\n");
+  vga_write("  ui show|kali|simple|panel - switch interface mode\n");
+  vga_write("  desktop         - draw IROS dashboard screen\n");
+  vga_write("  history         - show recent commands\n");
+  vga_write("  keys            - show keyboard shortcuts\n");
+  vga_write("  mouse status    - mouse position/buttons\n");
+  vga_write("  mouse on|off    - show or hide pointer\n");
+  vga_write("  mouse pos <r> <c> - set pointer position\n");
   vga_write("  alloc [size]    - kmalloc (default 64)\n");
   vga_write("  free            - kfree last alloc\n");
   vga_write("  reboot          - reboot machine\n");
   vga_write("  halt            - halt CPU\n");
+}
+
+static void cmd_dmesg(void) {
+  log_dmesg_dump();
+}
+
+static void cmd_log(const char *args) {
+  const char *p = skip_ws(args);
+  if (!p[0]) {
+    vga_write("usage: log serial on|off\n");
+    return;
+  }
+  if (strncmp(p, "serial", 6) == 0) {
+    p = skip_ws(p + 6);
+    if (strncmp(p, "on", 2) == 0) {
+      log_set_serial_enabled(1);
+      vga_write("log serial: on\n");
+    } else if (strncmp(p, "off", 3) == 0) {
+      log_set_serial_enabled(0);
+      vga_write("log serial: off\n");
+    } else {
+      vga_write("usage: log serial on|off\n");
+    }
+    return;
+  }
+  vga_write("usage: log serial on|off\n");
 }
 
 static void serial_read_to_eot(void) {
@@ -275,7 +338,7 @@ static void cmd_version(void) {
 static void cmd_about(void) {
   vga_write("IROS: freestanding 32-bit x86 kernel\n");
   vga_write("UI: VGA text + ANSI colors + shell\n");
-  vga_write("Input: PS/2 keyboard (IRQ1)\n");
+  vga_write("Input: PS/2 keyboard + PS/2 mouse (IRQ1/IRQ12)\n");
 }
 
 static void cmd_banner(void) {
@@ -285,6 +348,11 @@ static void cmd_banner(void) {
   vga_write("  | ||   / (_) \\__ \\\n");
   vga_write(" |___|_|_\\\\___/|___/\n");
   vga_write_ansi("\x1b[0m");
+}
+
+static void cmd_logo(void) {
+  vga_write("IROS logo asset: assets/iros-logo.svg\n");
+  vga_write("Note: current kernel runs in VGA text mode, so SVG is host-side branding.\n");
 }
 
 static void cmd_color(const char *args) {
@@ -312,9 +380,130 @@ static void cmd_status(const char *args) {
 
 static void cmd_prompt(const char *args) {
   const char *p = skip_ws(args);
-  if (strncmp(p, "kali", 4) == 0) use_kali_prompt = 1;
-  else if (strncmp(p, "simple", 6) == 0) use_kali_prompt = 0;
+  if (strncmp(p, "kali", 4) == 0) ui_mode = UI_MODE_KALI;
+  else if (strncmp(p, "simple", 6) == 0) ui_mode = UI_MODE_SIMPLE;
   else vga_write("usage: prompt kali|simple\n");
+}
+
+static const char *ui_mode_name(void) {
+  if (ui_mode == UI_MODE_PANEL) return "panel";
+  if (ui_mode == UI_MODE_KALI) return "kali";
+  return "simple";
+}
+
+static void cmd_ui(const char *args) {
+  const char *p = skip_ws(args);
+  if (!p[0] || strncmp(p, "show", 4) == 0) {
+    vga_write("ui mode: ");
+    vga_write(ui_mode_name());
+    vga_write("\n");
+    return;
+  }
+
+  if (strncmp(p, "kali", 4) == 0) {
+    ui_mode = UI_MODE_KALI;
+    vga_write("ui mode set: kali\n");
+    return;
+  }
+  if (strncmp(p, "simple", 6) == 0) {
+    ui_mode = UI_MODE_SIMPLE;
+    vga_write("ui mode set: simple\n");
+    return;
+  }
+  if (strncmp(p, "panel", 5) == 0) {
+    ui_mode = UI_MODE_PANEL;
+    status_set_enabled(1);
+    vga_write("ui mode set: panel\n");
+    return;
+  }
+
+  vga_write("usage: ui show|kali|simple|panel\n");
+}
+
+static void cmd_desktop(void) {
+  vga_clear();
+  vga_write_ansi("\x1b[30;46m IROS DASHBOARD \x1b[0m");
+  vga_write("\n");
+  vga_write("----------------------------------------------\n");
+  vga_write(" quick actions:\n");
+  vga_write("  help      - list commands\n");
+  vga_write("  app list  - list installed apps\n");
+  vga_write("  mem       - show memory stats\n");
+  vga_write("  dmesg     - show kernel logs\n");
+  vga_write("  ui panel  - enable panel prompt mode\n");
+  vga_write("----------------------------------------------\n");
+  vga_write(" tip: drag the right scrollbar with mouse.\n");
+}
+
+static void cmd_history(void) {
+  u32 oldest = (history_count > HIST_MAX) ? (history_count - HIST_MAX) : 0;
+  if (history_count == oldest) {
+    vga_write("history is empty\n");
+    return;
+  }
+
+  for (u32 i = oldest; i < history_count; i++) {
+    const char *line = hist_get(i);
+    if (!line) continue;
+    write_u32_dec(i);
+    vga_write(": ");
+    vga_write(line);
+    vga_write("\n");
+  }
+}
+
+static void cmd_keys(void) {
+  vga_write("Keyboard shortcuts:\n");
+  vga_write("  Up/Down       - command history\n");
+  vga_write("  PgUp/PgDn     - scroll shell output (page step)\n");
+  vga_write("  Home/End      - jump to top/bottom\n");
+  vga_write("  Keypad nav    - also supported when NumLock is off\n");
+  vga_write("  Ctrl+Alt+G    - release QEMU mouse/keyboard grab\n");
+}
+
+static void cmd_mouse(const char *args) {
+  const char *p = skip_ws(args);
+  if (!p[0] || strncmp(p, "status", 6) == 0) {
+    mouse_state_t s = mouse_get_state();
+    vga_write("mouse: ");
+    vga_write(s.enabled ? "on" : "off");
+    vga_write("  row=");
+    write_u32_dec((u32)s.row);
+    vga_write(" col=");
+    write_u32_dec((u32)s.col);
+    vga_write(" buttons=");
+    vga_write_hex((u32)s.buttons);
+    vga_write("\n");
+    return;
+  }
+
+  if (strncmp(p, "on", 2) == 0) {
+    mouse_set_enabled(1);
+    vga_write("mouse pointer: on\n");
+    return;
+  }
+
+  if (strncmp(p, "off", 3) == 0) {
+    mouse_set_enabled(0);
+    vga_write("mouse pointer: off\n");
+    return;
+  }
+
+  if (strncmp(p, "pos", 3) == 0) {
+    p = skip_ws(p + 3);
+    u32 row = 0, col = 0;
+    if (!parse_u32(p, &row, &p) || !parse_u32(p, &col, &p)) {
+      vga_write("usage: mouse pos <row> <col>\n");
+      return;
+    }
+    if (row > 23) row = 23;
+    if (col > 78) col = 78;
+    mouse_set_position((u8)row, (u8)col);
+    vga_write("mouse moved\n");
+    return;
+  }
+
+  vga_write("usage: mouse <status|on|off|pos>\n");
 }
 
 static void cmd_alloc(const char *args) {
@@ -439,6 +628,10 @@ static void handle_line(char *line) {
     vga_clear();
   } else if (strcmp(cmd, "mem") == 0) {
     cmd_mem();
+  } else if (strcmp(cmd, "dmesg") == 0) {
+    cmd_dmesg();
+  } else if (strcmp(cmd, "log") == 0) {
+    cmd_log(p);
   } else if (strcmp(cmd, "echo") == 0) {
     cmd_echo(p);
   } else if (strcmp(cmd, "app") == 0) {
@@ -453,12 +646,24 @@ static void handle_line(char *line) {
     cmd_about();
   } else if (strcmp(cmd, "banner") == 0) {
     cmd_banner();
+  } else if (strcmp(cmd, "logo") == 0) {
+    cmd_logo();
   } else if (strcmp(cmd, "color") == 0) {
     cmd_color(p);
   } else if (strcmp(cmd, "status") == 0) {
     cmd_status(p);
   } else if (strcmp(cmd, "prompt") == 0) {
     cmd_prompt(p);
+  } else if (strcmp(cmd, "ui") == 0) {
+    cmd_ui(p);
+  } else if (strcmp(cmd, "desktop") == 0) {
+    cmd_desktop();
+  } else if (strcmp(cmd, "history") == 0) {
+    cmd_history();
+  } else if (strcmp(cmd, "keys") == 0) {
+    cmd_keys();
+  } else if (strcmp(cmd, "mouse") == 0) {
+    cmd_mouse(p);
   } else if (strcmp(cmd, "alloc") == 0) {
     cmd_alloc(p);
   } else if (strcmp(cmd, "free") == 0) {
@@ -476,6 +681,7 @@ static void handle_line(char *line) {
 
 void shell_run(void) {
   log_info("Interactive shell ready");
+  vga_write_ansi("\x1b[36mIROS UI initialized. Type 'ui show' or 'help'.\x1b[0m\n");
 
   char line[128];
   for (;;) {
@@ -496,6 +702,23 @@ void shell_run(void) {
           line[len++] = h[i];
           vga_putc(h[i]);
         }
+        continue;
+      }
+
+      if (key == KEY_PGUP) {
+        vga_scroll(+12);
+        continue;
+      }
+      if (key == KEY_PGDN) {
+        vga_scroll(-12);
+        continue;
+      }
+      if (key == KEY_HOME) {
+        vga_scroll_top();
+        continue;
+      }
+      if (key == KEY_END) {
+        vga_scroll_bottom();
         continue;
       }
 

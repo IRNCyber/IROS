@@ -71,3 +71,22 @@ The format is based on Keep a Changelog principles and semantic versioning.
 - Minimal keyboard support (no extended scancodes)
 
 [Full Changelog](https://github.com/IRNCyber/IROS/commits/v1.0.0.1)
+
+---
+
+## [v1.0.0.2] - 2026-04-25
+
+### Added
+- Shell command history scrolling (Up/Down arrows)
+- Kernel log ring buffer + `dmesg` command
+- `log serial on|off` to mirror logs to COM1
+- Python bridge (QEMU serial TCP) with `py ping|exec|run`
+- GitHub Actions workflow to build `build/iros.img` artifact
+
+### Changed
+- App manifests support `type=` and `entry=`; Python apps can be executed via host bridge
+
+### Notes
+- Python is executed on the host and streamed back via serial; not embedded in the kernel yet
+
+[Full Changelog](https://github.com/IRNCyber/IROS/commits/v1.0.0.2)

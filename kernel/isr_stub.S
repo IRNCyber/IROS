@@ -27,10 +27,19 @@ isr_stub_\num:
 /* Common handler for no-error-code interrupts (we already pushed 0 + int_no). */
 isr_common:
   pusha
-  push %ds
-  push %es
-  push %fs
-  push %gs
+  /* Save segment selectors as 32-bit values (PUSH Sreg is 16-bit). */
+  xor %eax, %eax
+  mov %ds, %ax
+  pushl %eax
+  xor %eax, %eax
+  mov %es, %ax
+  pushl %eax
+  xor %eax, %eax
+  mov %fs, %ax
+  pushl %eax
+  xor %eax, %eax
+  mov %gs, %ax
+  pushl %eax
 
   mov $0x10, %ax
   mov %ax, %ds
@@ -42,10 +51,15 @@ isr_common:
   call isr_handler_c
   add $4, %esp
 
-  pop %gs
-  pop %fs
-  pop %es
-  pop %ds
+  /* Restore segments from 32-bit saved selectors. */
+  popl %eax
+  mov %ax, %gs
+  popl %eax
+  mov %ax, %fs
+  popl %eax
+  mov %ax, %es
+  popl %eax
+  mov %ax, %ds
   popa
   add $8, %esp
   iret
@@ -53,10 +67,19 @@ isr_common:
 /* Common handler for error-code interrupts (CPU pushed error code; stack has: err_code, int_no). */
 isr_common_err:
   pusha
-  push %ds
-  push %es
-  push %fs
-  push %gs
+  /* Save segment selectors as 32-bit values (PUSH Sreg is 16-bit). */
+  xor %eax, %eax
+  mov %ds, %ax
+  pushl %eax
+  xor %eax, %eax
+  mov %es, %ax
+  pushl %eax
+  xor %eax, %eax
+  mov %fs, %ax
+  pushl %eax
+  xor %eax, %eax
+  mov %gs, %ax
+  pushl %eax
 
   mov $0x10, %ax
   mov %ax, %ds
@@ -68,10 +91,15 @@ isr_common_err:
   call isr_handler_c
   add $4, %esp
 
-  pop %gs
-  pop %fs
-  pop %es
-  pop %ds
+  /* Restore segments from 32-bit saved selectors. */
+  popl %eax
+  mov %ax, %gs
+  popl %eax
+  mov %ax, %fs
+  popl %eax
+  mov %ax, %es
+  popl %eax
+  mov %ax, %ds
   popa
   add $4, %esp /* pop int_no, leave err_code? */
   add $4, %esp /* pop err_code */

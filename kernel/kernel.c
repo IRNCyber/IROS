@@ -1,8 +1,10 @@
 #include <iros/cpu.h>
+#include <iros/gdt.h>
 #include <iros/idt.h>
 #include <iros/keyboard.h>
 #include <iros/log.h>
 #include <iros/memory.h>
+#include <iros/mouse.h>
 #include <iros/pic.h>
 #include <iros/serial.h>
 #include <iros/shell.h>
@@ -11,6 +13,8 @@
 
 void kernel_main(void) {
   cpu_cli();
+
+  gdt_init();
 
   vga_init();
   log_init();
@@ -30,6 +34,7 @@ void kernel_main(void) {
   }
 
   keyboard_init();
+  mouse_init();
 
   cpu_sti();
 

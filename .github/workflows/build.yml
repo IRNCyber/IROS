@@ -1,0 +1,28 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  iros-img:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld llvm python3 make
+
+      - name: Build iros.img
+        run: |
+          make clean || true
+          make PY=python3 CC=clang LD=ld.lld OBJCOPY=llvm-objcopy
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iros-img
+          path: build/iros.img
+

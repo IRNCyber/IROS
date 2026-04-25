@@ -1,17 +1,21 @@
 #include <iros/isr.h>
 #include <iros/keyboard.h>
+#include <iros/mouse.h>
 #include <iros/pic.h>
 #include <iros/ports.h>
 #include <iros/cpu.h>
 
 enum { KBD_DATA = 0x60, KBD_STATUS = 0x64 };
+enum { KBD_STATUS_OUT = 1u, KBD_STATUS_AUX = 0x20u };
 
 static volatile u16 ring[128];
 static volatile u32 ring_r = 0;
 static volatile u32 ring_w = 0;
+static u8 key_down[128];
 
 static int shift_down = 0;
 static int e0_prefix = 0;
+static int irq_enabled = 0;
 
 static void ring_put(u16 c) {
   u32 next = (ring_w + 1) & 127u;
@@ -47,14 +51,7 @@ static char scancode_to_ascii(u8 sc, int shifted) {
   return c;
 }
 
-static void keyboard_irq(regs_t *r) {
-  (void)r;
-
-  u8 status = inb(KBD_STATUS);
-  if ((status & 1u) == 0) return;
-
-  u8 sc = inb(KBD_DATA);
-
+static void keyboard_process_scancode(u8 sc) {
   if (sc == 0xE0) {
     e0_prefix = 1;
     return;
@@ -63,6 +60,7 @@ static void keyboard_irq(regs_t *r) {
   /* Handle releases. */
   if (sc & 0x80u) {
     u8 rel = (u8)(sc & 0x7Fu);
+    if (rel < 128) key_down[rel] = 0;
     if (e0_prefix) {
       e0_prefix = 0;
       return;
@@ -88,22 +86,84 @@ static void keyboard_irq(regs_t *r) {
     }
   }
 
+  /* Keypad navigation when NumLock is off can arrive as non-E0 Set 1 codes. */
+  switch (sc) {
+    case 0x48: ring_put(KEY_UP); return;
+    case 0x50: ring_put(KEY_DOWN); return;
+    case 0x4B: ring_put(KEY_LEFT); return;
+    case 0x4D: ring_put(KEY_RIGHT); return;
+    case 0x49: ring_put(KEY_PGUP); return;
+    case 0x51: ring_put(KEY_PGDN); return;
+    case 0x47: ring_put(KEY_HOME); return;
+    case 0x4F: ring_put(KEY_END); return;
+    case 0x53: ring_put(KEY_DEL); return;
+    default: break;
+  }
+
   /* Shift make */
   if (sc == 0x2A || sc == 0x36) {
+    key_down[sc] = 1;
     shift_down = 1;
     return;
+  }
+
+  /* Debounce typematic repeats: accept one make per press, until break arrives. */
+  if (sc < 128) {
+    if (key_down[sc]) return;
+    key_down[sc] = 1;
   }
 
   char c = scancode_to_ascii(sc, shift_down);
   if (c) ring_put((u16)(u8)c);
 }
 
-void keyboard_init(void) {
-  /* Ensure PIC IRQ1 is unmasked. */
-  pic_set_mask(1, 0);
+static void keyboard_poll_once(void) {
+  u8 status = inb(KBD_STATUS);
+  if ((status & KBD_STATUS_OUT) == 0) return;
+  /* Drain AUX bytes and route them to mouse parser so keyboard cannot be starved. */
+  if (status & KBD_STATUS_AUX) {
+    u8 data = inb(KBD_DATA);
+    mouse_feed_byte(data);
+    mouse_flush_ui();
+    return;
+  }
+  u8 sc = inb(KBD_DATA);
+  keyboard_process_scancode(sc);
+}
 
-  /* IRQ1 after PIC remap to 0x20 is int 0x21 (33). */
+static void keyboard_irq(regs_t *r) {
+  (void)r;
+
+  u8 status = inb(KBD_STATUS);
+  if ((status & KBD_STATUS_OUT) == 0) return;
+  /* Drain stray AUX bytes on IRQ1 so controller output does not clog. */
+  if (status & KBD_STATUS_AUX) {
+    u8 data = inb(KBD_DATA);
+    mouse_feed_byte(data);
+    return;
+  }
+
+  u8 sc = inb(KBD_DATA);
+  keyboard_process_scancode(sc);
+}
+
+void keyboard_init(void) {
+  for (u32 i = 0; i < 128u; i++) key_down[i] = 0;
+  ring_r = 0;
+  ring_w = 0;
+  shift_down = 0;
+  e0_prefix = 0;
+
   isr_register(33, keyboard_irq);
+
+  /* Drain any pending bytes before enabling IRQs to avoid an immediate storm. */
+  for (u32 i = 0; i < 32u; i++) {
+    if ((inb(KBD_STATUS) & 1u) == 0) break;
+    (void)inb(KBD_DATA);
+  }
+
+  pic_set_mask(1, 0);
+  irq_enabled = 1;
 }
 
 char keyboard_try_getchar(void) {
@@ -114,20 +174,29 @@ char keyboard_try_getchar(void) {
 
 char keyboard_getchar(void) {
   for (;;) {
-    u16 k = ring_get();
+    u16 k = keyboard_getkey();
     if (k && k < 0x100) return (char)(u8)k;
-    cpu_halt();
   }
 }
 
 u16 keyboard_try_getkey(void) {
+  mouse_flush_ui();
+  u16 k = ring_get();
+  if (k) return k;
+  keyboard_poll_once();
+  mouse_flush_ui();
   return ring_get();
 }
 
 u16 keyboard_getkey(void) {
   for (;;) {
+    mouse_flush_ui();
     u16 k = ring_get();
     if (k) return k;
-    cpu_halt();
+    keyboard_poll_once();
+    mouse_flush_ui();
+    k = ring_get();
+    if (k) return k;
+    for (u32 i = 0; i < (irq_enabled ? 1000u : 10000u); i++) { __asm__ volatile("nop"); }
   }
 }

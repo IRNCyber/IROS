@@ -88,6 +88,8 @@ $cflags = @(
 )
 
 & $cc @ccTarget @cflags -c kernel\entry.S -o "$BuildDir\entry.o"
+& $cc @ccTarget @cflags -c kernel\gdt_flush.S -o "$BuildDir\gdt_flush.o"
+& $cc @ccTarget @cflags -c kernel\gdt.c -o "$BuildDir\gdt.o"
 & $cc @ccTarget @cflags -c kernel\isr_stub.S -o "$BuildDir\isr_stub.o"
 & $cc @ccTarget @cflags -c kernel\kernel.c -o "$BuildDir\kernel.o"
 & $cc @ccTarget @cflags -c kernel\vga.c -o "$BuildDir\vga.o"
@@ -97,6 +99,7 @@ $cflags = @(
 & $cc @ccTarget @cflags -c kernel\pic.c -o "$BuildDir\pic.o"
 & $cc @ccTarget @cflags -c kernel\isr.c -o "$BuildDir\isr.o"
 & $cc @ccTarget @cflags -c kernel\keyboard.c -o "$BuildDir\keyboard.o"
+& $cc @ccTarget @cflags -c kernel\mouse.c -o "$BuildDir\mouse.o"
 & $cc @ccTarget @cflags -c kernel\shell.c -o "$BuildDir\shell.o"
 & $cc @ccTarget @cflags -c kernel\status.c -o "$BuildDir\status.o"
 & $cc @ccTarget @cflags -c kernel\serial.c -o "$BuildDir\serial.o"
@@ -105,8 +108,8 @@ $cflags = @(
 & $cc @ccTarget @cflags -c lib\string.c -o "$BuildDir\string.o"
 
 & $ld -m elf_i386 -T linker.ld -o "$BuildDir\kernel.elf" `
-  "$BuildDir\entry.o" "$BuildDir\isr_stub.o" "$BuildDir\kernel.o" "$BuildDir\vga.o" "$BuildDir\log.o" `
-  "$BuildDir\memory.o" "$BuildDir\idt.o" "$BuildDir\pic.o" "$BuildDir\isr.o" "$BuildDir\keyboard.o" `
+  "$BuildDir\entry.o" "$BuildDir\gdt_flush.o" "$BuildDir\gdt.o" "$BuildDir\isr_stub.o" "$BuildDir\kernel.o" "$BuildDir\vga.o" "$BuildDir\log.o" `
+  "$BuildDir\memory.o" "$BuildDir\idt.o" "$BuildDir\pic.o" "$BuildDir\isr.o" "$BuildDir\keyboard.o" "$BuildDir\mouse.o" `
   "$BuildDir\shell.o" "$BuildDir\status.o" "$BuildDir\serial.o" "$BuildDir\apps.o" "$BuildDir\apps_gen.o" "$BuildDir\string.o"
 
 & $objcopy -O binary "$BuildDir\kernel.elf" "$BuildDir\kernel.bin"

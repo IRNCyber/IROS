@@ -10,8 +10,10 @@ Minimal BIOS-bootable 32-bit x86 kernel written in freestanding C with a tiny bo
 - Structured logging (`log_info`, `log_error`)
 - Heap allocator (`kmalloc` / `kfree`) with usage stats (`mem` command)
 - IDT + PIC remap + keyboard IRQ1 handler
+- PS/2 mouse support (IRQ12) with text-mode pointer overlay
 - Interactive shell with built-in commands
 - Simple “apps” registry compiled into the kernel (`app list/info/run`)
+- Project logo asset at `assets/iros-logo.svg`
 
 ## Layout
 - `boot/` - BIOS boot sector (`boot.S` + `boot.ld`)
@@ -77,6 +79,19 @@ cd C:\Users\rohan\CLionProjects\IROS
 .\run.ps1
 ```
 
+IROS VM wrapper (IROS-branded launcher):
+```powershell
+.\iros-vm.ps1 -Build -Display sdl
+```
+
+IROS Emulator launcher (preferred name):
+```powershell
+.\iros-emulator.ps1 -Build -Display sdl
+```
+```bat
+iros-emulator.cmd -Build -Display sdl
+```
+
 If `run.ps1` can’t find QEMU, set `QEMU_HOME` (adjust if installed elsewhere):
 ```powershell
 $env:QEMU_HOME = "C:\Program Files\qemu"
@@ -85,8 +100,12 @@ $env:QEMU_HOME = "C:\Program Files\qemu"
 ## Shell Commands
 Core:
 - `help`, `clear` / `cls`, `mem`, `echo <text>`
-- `version`, `about`, `banner`
-- `color <fg> <bg>` (0-15), `status on|off`, `prompt kali|simple`
+- `dmesg`, `log serial on|off`
+- `version`, `about`, `banner`, `logo`
+- `color <fg> <bg>` (0-15), `status on|off`, `prompt kali|simple`, `history`, `keys`
+- `ui show|kali|simple|panel`, `desktop`
+- `mouse status|on|off|pos <row> <col>`
+  - Left-click and drag on the right scrollbar to scroll up/down
 - `alloc [size]`, `free`, `reboot`, `halt`
 
 Apps:
@@ -157,3 +176,14 @@ Windows (if you have `mingw32-make` on PATH):
 ```bat
 mingw32-make CC=clang LD=ld.lld OBJCOPY=llvm-objcopy PY=python
 ```
+
+## Logo
+- SVG logo file: `assets/iros-logo.svg`
+- In-kernel command: `logo`
+- Current kernel display is VGA text mode, so SVG rendering is host-side branding.
+
+## Input Troubleshooting (QEMU)
+- Click inside the QEMU window to capture keyboard input.
+- Press `Ctrl+Alt+G` to release/reacquire input grab.
+- Run in foreground while debugging input:
+  - `.\run.ps1 -Detach:$false -Display sdl`
