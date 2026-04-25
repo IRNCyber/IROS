@@ -25,14 +25,25 @@ void rtc_read(rtc_time_t *t) {
 
   u8 regB = cmos_read(0x0B);
   int bcd = !(regB & 0x04);
+  int is_24h = regB & 0x02;
+
+  /* Save and strip PM flag before any conversion. */
+  int pm = hr & 0x80;
+  hr = (u8)(hr & 0x7Fu);
 
   if (bcd) {
     sec = bcd_to_bin(sec);
     min = bcd_to_bin(min);
-    hr  = bcd_to_bin((u8)(hr & 0x7F));
+    hr  = bcd_to_bin(hr);
     day = bcd_to_bin(day);
     mon = bcd_to_bin(mon);
     yr  = bcd_to_bin(yr);
+  }
+
+  /* Convert 12-hour to 24-hour if needed. */
+  if (!is_24h) {
+    if (hr == 12 && !pm) hr = 0;
+    else if (hr != 12 && pm) hr = (u8)(hr + 12u);
   }
 
   t->second = sec;
