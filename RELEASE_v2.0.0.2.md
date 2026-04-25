@@ -1,6 +1,5 @@
-# IROS — Suggested Changes
+# RELEASE_v2.0.0.2
 
-After reviewing the full codebase and booting the kernel, here are improvements organized by priority and effort.
 
 ---
 
