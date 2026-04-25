@@ -1,4 +1,4 @@
-# IROS v2.0.0.1 — Interactive Core Upgrade
+# IROS v2.0.0.1 
 
 Release date: 2026-04-25
 
