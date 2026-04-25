@@ -90,3 +90,34 @@ The format is based on Keep a Changelog principles and semantic versioning.
 - Python is executed on the host and streamed back via serial; not embedded in the kernel yet
 
 [Full Changelog](https://github.com/IRNCyber/IROS/commits/v1.0.0.2)
+
+---
+
+## [v2.0.0.1] - 2026-04-25
+
+### Added
+- UI and shell enhancements: `ui show|kali|simple|panel`, `desktop`, `banner`, `logo`, `status on|off`, `prompt kali|simple`, `color <fg> <bg>`
+- Expanded shell command set: `version`, `about`, `history`, `keys`, `mouse status|on|off|pos`, `alloc [size]`, `free`, `reboot`, `halt`
+- App workflows: `app list`, `app info <name>`, `app run <name>`, `app hostrun <name>`, `app install <git-url>`, `git install <git-url>`
+- Python bridge commands in shell: `py ping`, `py exec <code>`, `py run <app-name>`
+- IROS-branded launchers: `iros-vm.ps1`, `iros-emulator.ps1`, `iros-emulator.cmd`
+- Project branding asset: `assets/iros-logo.svg`
+
+### Changed
+- Input stack hardening for PS/2 keyboard and mouse sharing port `0x60` (better AUX byte routing and queue draining)
+- Mouse pointer overlay path stabilized and integrated with shell rendering flow
+- Scroll behavior improved with stronger page navigation support and smoother shell history movement
+- Default UI mode set to a simpler/stable shell-first layout
+- QEMU launcher flow improved with safer defaults and fallback behavior
+
+### Fixed
+- Repeated-character keyboard behavior caused by mixed keyboard/mouse byte handling
+- Cases where shell appeared unresponsive due to pending AUX bytes in keyboard path
+- Mouse corruption artifacts caused by unsafe text redraw interactions
+- Windows build/run friction by documenting LLVM/QEMU/Python/Git install paths and runner usage
+
+### Notes
+- Python still runs on the host via serial bridge; it is not yet an in-kernel Python runtime
+- App “install” is host-assisted (git clone + manifest generation + rebuild), not network-native inside the kernel
+
+[Full Changelog](https://github.com/IRNCyber/IROS/commits/v2.0.0.1)
