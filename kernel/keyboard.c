@@ -128,7 +128,10 @@ static void keyboard_process_scancode(u8 sc) {
     key_down[sc] = 1;
   }
 
-  int effective_shift = shift_down ^ caps_lock;
+  /* Caps Lock only affects letter keys; check with base map first. */
+  char base = scancode_to_ascii(sc, 0);
+  int is_letter = (base >= 'a' && base <= 'z');
+  int effective_shift = is_letter ? (shift_down ^ caps_lock) : shift_down;
   char c = scancode_to_ascii(sc, effective_shift);
   if (ctrl_down && c >= 'a' && c <= 'z') {
     ring_put((u16)(u8)(c - 'a' + 1));
